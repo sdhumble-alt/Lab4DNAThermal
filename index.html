@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DNA Thermal Denaturation Lab (Tm & A260)</title>
+    <title>DNA Thermal Denaturation Lab</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -27,23 +27,41 @@
             text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
             border: 2px solid #065f46;
         }
-        /* Range slider styling */
-        input[type=range]::-webkit-slider-thumb {
-            height: 22px;
-            width: 22px;
-            border-radius: 50%;
-            background: #f59e0b;
-            cursor: pointer;
-            border: 2px solid #ffffff;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+        .lcd-warning {
+            background-color: #271705;
+            color: #f59e0b;
+            text-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+            border: 2px solid #92400e;
+        }
+        /* Custom subtle pulse for active heater */
+        @keyframes heaterPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            50% { box-shadow: 0 0 14px 2px rgba(245, 158, 11, 0.25); }
+        }
+        .heater-active {
+            animation: heaterPulse 1.5s infinite;
+        }
+        /* Drag & Drop Cuvette Styling */
+        .cuvette-draggable {
+            cursor: grab;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .cuvette-draggable:active {
+            cursor: grabbing;
+        }
+        .drop-zone-active {
+            border-color: #38bdf8 !important;
+            background-color: rgba(56, 189, 248, 0.14) !important;
+            box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between">
+<body class="min-h-screen flex flex-col">
 
     <!-- TOP TITLE HEADER -->
     <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 shadow-lg">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="flex items-center space-x-3">
                 <div class="h-11 w-11 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
                     <i class="fa-solid fa-dna text-2xl"></i>
@@ -54,6 +72,10 @@
             </div>
             
             <div class="flex items-center gap-3">
+                <div id="instrument-status-pill" class="px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs font-mono flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+                    <span>UV-260 AUTO-BLANKED &amp; READY</span>
+                </div>
                 <button onclick="resetAllData()" class="px-3.5 py-2 bg-slate-800 hover:bg-rose-950/40 hover:text-rose-300 text-slate-300 rounded-lg text-xs font-semibold border border-slate-700 transition flex items-center gap-2">
                     <i class="fa-solid fa-rotate-left"></i>
                     <span>Reset Lab</span>
@@ -62,141 +84,319 @@
         </div>
     </header>
 
-    <!-- CORE INSTRUCTIONAL BANNER -->
-    <section class="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-5">
-        <div class="bg-slate-900/90 border-l-4 border-cyan-500 rounded-r-xl p-4 shadow-md text-sm text-slate-300 flex items-start space-x-3">
-            <i class="fa-solid fa-circle-info text-cyan-400 text-lg mt-0.5"></i>
-            <div>
-                <strong class="text-white">What Experiment Are We Running?</strong> As DNA is heated, heat breaks the hydrogen bonds holding base pairs together, unzipping the double helix into single strands. Single-stranded DNA absorbs significantly more UV light at 260 nm (A₂₆₀) than double-stranded DNA. By tracking absorbance across temperatures, you will map denaturation curves to discover each sample's melting temperature (T<sub>m</sub>) and infer its G–C vs. A–T composition.
+    <!-- TOAST / BENCH NOTIFICATION BANNER -->
+    <div id="bench-alert" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-6 pt-4">
+        <div id="bench-alert-box" class="bg-amber-950/80 border border-amber-600/60 text-amber-200 px-4 py-3 rounded-xl text-xs font-medium flex items-center justify-between shadow-lg">
+            <div class="flex items-center gap-2.5">
+                <i class="fa-solid fa-triangle-exclamation text-amber-400 text-sm"></i>
+                <span id="bench-alert-msg">Instrument message</span>
             </div>
+            <button onclick="hideBenchAlert()" class="text-amber-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
         </div>
-    </section>
+    </div>
 
-    <!-- MAIN TWO-COLUMN LAB LAYOUT -->
+    <!-- MAIN LAB LAYOUT: TOP BENCH (STEPS 1 & 2) + BOTTOM DATA LOG (STEP 3) -->
     <main class="max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow">
 
-        <!-- LEFT PANEL: CONTROLS & LIVE VIEW (5 COLS) -->
-        <div class="lg:col-span-5 space-y-5">
-            
-            <!-- CONTROLS CONTAINER -->
-            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-6">
-                
-                <!-- STEP 1: CHOOSE SAMPLE -->
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <span class="h-6 w-6 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center">1</span>
-                            <h2 class="text-sm font-bold text-white uppercase tracking-wider">Select Unknown DNA Sample</h2>
-                        </div>
-                        <button onclick="generateNewReplicate()" title="Simulate fresh sample preparation with minor pipetting/concentration variance" class="text-[11px] font-mono text-slate-400 hover:text-cyan-400 transition flex items-center gap-1.5">
-                            <i class="fa-solid fa-flask-vial"></i> Fresh Replicate
-                        </button>
+        <!-- TOP LEFT PANEL: STEP 1 - PREPARED CUVETTE RACK & UV SPECTROPHOTOMETER MACHINE (6 COLS) -->
+        <div class="lg:col-span-6 flex flex-col">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4 h-full flex flex-col justify-between">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center space-x-2">
+                        <span class="h-6 w-6 rounded-full bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center">1</span>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Load Prepared DNA Cuvette into Machine</h2>
                     </div>
+                    <button onclick="generateNewReplicate()" title="Prepare fresh pre-buffered DNA cuvettes with minor variance" class="text-[11px] font-mono text-slate-400 hover:text-cyan-400 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-vials"></i> Fresh Cuvettes
+                    </button>
+                </div>
 
-                    <div class="grid grid-cols-4 gap-2 pt-1">
-                        <button onclick="selectSample('A')" id="btn-sample-A" class="sample-btn py-2.5 px-1 rounded-lg border border-cyan-500 bg-cyan-950/40 text-cyan-300 font-bold text-xs text-center transition shadow">
-                            Sample A
-                        </button>
-                        <button onclick="selectSample('B')" id="btn-sample-B" class="sample-btn py-2.5 px-1 rounded-lg border border-slate-800 bg-slate-800/40 text-slate-300 font-bold text-xs text-center transition">
-                            Sample B
-                        </button>
-                        <button onclick="selectSample('C')" id="btn-sample-C" class="sample-btn py-2.5 px-1 rounded-lg border border-slate-800 bg-slate-800/40 text-slate-300 font-bold text-xs text-center transition">
-                            Sample C
-                        </button>
-                        <button onclick="selectSample('D')" id="btn-sample-D" class="sample-btn py-2.5 px-1 rounded-lg border border-slate-800 bg-slate-800/40 text-slate-300 font-bold text-xs text-center transition">
-                            Sample D
-                        </button>
+                <!-- Ice Rack with 4 Draggable Quartz Cuvettes -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Ice Rack (Pre-Buffered DNA in 1× SSC):</span>
+                        <span class="text-[10px] font-mono text-cyan-400"><i class="fa-solid fa-hand-pointer mr-1"></i>Drag (or tap) cuvette into chamber</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2.5 bg-slate-950/70 p-3 rounded-xl border border-slate-800/80">
+                        <!-- Cuvette A -->
+                        <div draggable="true" ondragstart="handleDragStart(event, 'A')" onclick="loadCuvette('A')" id="rack-cuvette-A" class="cuvette-draggable p-2.5 rounded-lg border border-slate-700 hover:border-cyan-400 bg-slate-900 text-center transition flex flex-col items-center gap-1.5 shadow">
+                            <!-- Mini Quartz Cuvette Graphic -->
+                            <div class="w-6 h-10 rounded-b border-2 border-slate-400/80 bg-slate-800 relative overflow-hidden flex items-end">
+                                <div class="w-full h-3/4 bg-cyan-400/40 border-t border-cyan-300/60"></div>
+                            </div>
+                            <span class="text-xs font-bold text-cyan-400">Sample A</span>
+                        </div>
+
+                        <!-- Cuvette B -->
+                        <div draggable="true" ondragstart="handleDragStart(event, 'B')" onclick="loadCuvette('B')" id="rack-cuvette-B" class="cuvette-draggable p-2.5 rounded-lg border border-slate-700 hover:border-emerald-400 bg-slate-900 text-center transition flex flex-col items-center gap-1.5 shadow">
+                            <div class="w-6 h-10 rounded-b border-2 border-slate-400/80 bg-slate-800 relative overflow-hidden flex items-end">
+                                <div class="w-full h-3/4 bg-emerald-400/40 border-t border-emerald-300/60"></div>
+                            </div>
+                            <span class="text-xs font-bold text-emerald-400">Sample B</span>
+                        </div>
+
+                        <!-- Cuvette C -->
+                        <div draggable="true" ondragstart="handleDragStart(event, 'C')" onclick="loadCuvette('C')" id="rack-cuvette-C" class="cuvette-draggable p-2.5 rounded-lg border border-slate-700 hover:border-amber-400 bg-slate-900 text-center transition flex flex-col items-center gap-1.5 shadow">
+                            <div class="w-6 h-10 rounded-b border-2 border-slate-400/80 bg-slate-800 relative overflow-hidden flex items-end">
+                                <div class="w-full h-3/4 bg-amber-400/40 border-t border-amber-300/60"></div>
+                            </div>
+                            <span class="text-xs font-bold text-amber-400">Sample C</span>
+                        </div>
+
+                        <!-- Cuvette D -->
+                        <div draggable="true" ondragstart="handleDragStart(event, 'D')" onclick="loadCuvette('D')" id="rack-cuvette-D" class="cuvette-draggable p-2.5 rounded-lg border border-slate-700 hover:border-purple-400 bg-slate-900 text-center transition flex flex-col items-center gap-1.5 shadow">
+                            <div class="w-6 h-10 rounded-b border-2 border-slate-400/80 bg-slate-800 relative overflow-hidden flex items-end">
+                                <div class="w-full h-3/4 bg-purple-400/40 border-t border-purple-300/60"></div>
+                            </div>
+                            <span class="text-xs font-bold text-purple-400">Sample D</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- STEP 2: TEMPERATURE & MEASURE -->
-                <div class="space-y-4 pt-4 border-t border-slate-800">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <span class="h-6 w-6 rounded-full bg-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center">2</span>
-                            <h2 class="text-sm font-bold text-white uppercase tracking-wider">Adjust Temp (°C) & Measure</h2>
+                <!-- REALISTIC BENCHTOP UV-VIS SPECTROPHOTOMETER GRAPHIC -->
+                <div class="pt-2">
+                    <!-- Machine Upper Housing (Beveled Light-Grey/Slate Lab Instrument Body) -->
+                    <div class="relative bg-gradient-to-b from-slate-200 via-slate-300 to-slate-400 rounded-t-3xl border-t-4 border-x-2 border-slate-100 p-4 sm:p-5 shadow-[0_18px_35px_rgba(0,0,0,0.65)] text-slate-900">
+                        
+                        <!-- Top Sculpted Seam & Side Cooling Vents -->
+                        <div class="flex items-center justify-between border-b-2 border-slate-400/80 pb-2.5 mb-3.5">
+                            <div class="flex items-center gap-2.5">
+                                <!-- Brand Badge -->
+                                <div class="bg-slate-900 text-white px-2.5 py-1 rounded-md flex items-center gap-2 shadow-inner">
+                                    <span class="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
+                                    <span class="text-[11px] font-mono font-extrabold tracking-widest">THERMOSPEC™ UV-2600</span>
+                                </div>
+                                <span class="hidden sm:inline-block text-[10px] font-bold uppercase tracking-wider text-slate-600">Peltier Spectrophotometer</span>
+                            </div>
+
+                            <!-- Decorative Instrument Vents & Eject Button -->
+                            <div class="flex items-center gap-3">
+                                <button onclick="ejectCuvette()" id="btn-eject" class="hidden text-[10px] font-mono font-bold bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 rounded shadow transition">
+                                    <i class="fa-solid fa-eject mr-1"></i>Eject Cuvette
+                                </button>
+                                <div class="flex gap-1" title="Deuterium Lamp Cooling Vents">
+                                    <span class="w-1 h-4 bg-slate-500/70 rounded-full"></span>
+                                    <span class="w-1 h-4 bg-slate-500/70 rounded-full"></span>
+                                    <span class="w-1 h-4 bg-slate-500/70 rounded-full"></span>
+                                    <span class="w-1 h-4 bg-slate-500/70 rounded-full"></span>
+                                </div>
+                            </div>
                         </div>
-                        <span id="active-sample-badge" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">Sample A</span>
+
+                        <!-- Machine Deck: Left Recessed Sample Compartment + Right Tilted Control Console -->
+                        <div class="grid grid-cols-12 gap-4 items-stretch">
+                            
+                            <!-- LEFT: RECESSED OPTICAL SAMPLE COMPARTMENT (6 Cols) -->
+                            <div class="col-span-12 sm:col-span-6 flex flex-col">
+                                <!-- Sliding Lid Header Bar -->
+                                <div class="bg-slate-800 text-slate-300 text-[10px] font-mono uppercase tracking-wider px-3 py-1 rounded-t-xl border-x border-t border-slate-600 flex items-center justify-between">
+                                    <span><i class="fa-solid fa-box-open text-cyan-400 mr-1"></i>Sample Hatch</span>
+                                    <span id="hatch-door-status" class="text-amber-400 font-bold">LID OPEN</span>
+                                </div>
+
+                                <!-- Deep Recessed Optical Well (Drop Zone) -->
+                                <div id="cuvette-drop-zone"
+                                     ondragover="handleDragOver(event)"
+                                     ondragleave="handleDragLeave(event)"
+                                     ondrop="handleDrop(event)"
+                                     class="flex-grow bg-slate-950 border-x-4 border-b-4 border-slate-700 rounded-b-xl p-3 flex flex-col items-center justify-between text-center transition-all min-h-[168px] relative shadow-[inset_0_8px_20px_rgba(0,0,0,0.95)] overflow-hidden">
+
+                                    <!-- Internal Optical Path Laser Guide Graphic (SVG Background) -->
+                                    <svg class="w-full h-full absolute inset-0 pointer-events-none opacity-40" viewBox="0 0 220 150" preserveAspectRatio="none">
+                                        <!-- Left Deuterium Lamp Lens Housing -->
+                                        <rect x="0" y="52" width="18" height="46" rx="3" fill="#334155" stroke="#64748b" stroke-width="1.5"/>
+                                        <circle cx="18" cy="75" r="6" fill="#38bdf8"/>
+                                        <!-- Right Photodiode Detector Lens Housing -->
+                                        <rect x="202" y="52" width="18" height="46" rx="3" fill="#334155" stroke="#64748b" stroke-width="1.5"/>
+                                        <circle cx="202" cy="75" r="5" fill="#10b981"/>
+                                        <!-- Metallic Peltier Block Base Frame -->
+                                        <path d="M72 115 L148 115 L158 148 L62 148 Z" fill="#1e293b" stroke="#475569" stroke-width="1.5"/>
+                                        <!-- Peltier Copper Heating Fins -->
+                                        <line x1="82" y1="126" x2="138" y2="126" stroke="#b45309" stroke-width="2"/>
+                                        <line x1="78" y1="134" x2="142" y2="134" stroke="#b45309" stroke-width="2"/>
+                                        <line x1="74" y1="142" x2="146" y2="142" stroke="#b45309" stroke-width="2"/>
+                                    </svg>
+
+                                    <div class="z-10 text-[9px] font-mono uppercase tracking-widest text-slate-400 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+                                        Peltier Turret Cell #1
+                                    </div>
+
+                                    <!-- Empty State Prompt (Socket) -->
+                                    <div id="chamber-empty-view" class="z-10 my-auto space-y-1 pointer-events-none flex flex-col items-center">
+                                        <!-- Empty Machined Metal Socket -->
+                                        <div class="w-10 h-14 rounded-b border-2 border-dashed border-cyan-500/60 bg-slate-900/70 flex flex-col items-center justify-center text-cyan-400 shadow-inner">
+                                            <i class="fa-solid fa-arrow-down text-xs animate-bounce"></i>
+                                        </div>
+                                        <div class="text-[11px] font-bold text-slate-300 pt-1">Drop Cuvette into Socket</div>
+                                    </div>
+
+                                    <!-- Loaded Cuvette Visual Inside Peltier Holder -->
+                                    <div id="chamber-loaded-view" class="z-10 hidden flex-col items-center justify-center w-full my-auto">
+                                        <!-- Cuvette inside metallic heating block with active UV beam -->
+                                        <div class="relative flex items-center justify-center w-full py-1">
+                                            <!-- UV Beam Left (260 nm Incident) -->
+                                            <div class="h-1.5 flex-grow bg-cyan-400 shadow-[0_0_12px_#38bdf8]"></div>
+                                            
+                                            <!-- Metallic Peltier Jacket Clamping the Quartz Cuvette -->
+                                            <div class="relative px-1.5 pb-1 pt-0.5 bg-gradient-to-b from-slate-700 to-slate-800 rounded-b-lg border-x-2 border-b-2 border-amber-500/60 shadow-lg">
+                                                <div id="inserted-cuvette-body" class="w-8 h-13 rounded-b border-2 border-white/90 bg-slate-950 relative overflow-hidden flex items-end shadow-inner" style="height: 50px;">
+                                                    <div id="inserted-cuvette-liquid" class="w-full h-3/4 bg-cyan-400/60 border-t border-white/80 transition-colors"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- UV Beam Right (Transmitted to Detector) -->
+                                            <div id="uv-beam-transmitted" class="h-1.5 flex-grow bg-cyan-400 shadow-[0_0_8px_#38bdf8]"></div>
+                                        </div>
+                                        <div id="chamber-cuvette-label" class="text-xs font-mono font-bold text-white bg-slate-900/90 px-2.5 py-0.5 rounded border border-slate-700 mt-1">
+                                            Sample A
+                                        </div>
+                                    </div>
+
+                                    <div class="z-10 w-full flex justify-between text-[8px] font-mono text-slate-500 px-1">
+                                        <span>D₂ LAMP (260nm)</span>
+                                        <span>Si PHOTODIODE</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- RIGHT: ANGLED INSTRUMENT CONTROL PANEL & LCD SCREEN (6 Cols) -->
+                            <div class="col-span-12 sm:col-span-6 bg-slate-800 rounded-xl p-3 border-2 border-slate-600 shadow-inner flex flex-col justify-between gap-2.5 text-white">
+                                
+                                <!-- Backlit Digital LCD Readout -->
+                                <div id="abs-lcd-box" class="lcd-display rounded-lg p-3 text-center flex-grow flex flex-col justify-center shadow-inner">
+                                    <div class="flex items-center justify-between px-1 text-[10px] font-mono opacity-85 border-b border-emerald-800/60 pb-1">
+                                        <span>MODE: ABSORBANCE</span>
+                                        <span>λ = 260.0 nm</span>
+                                    </div>
+                                    <div class="text-3xl font-mono font-bold tracking-wider my-1.5" id="a260-display">---</div>
+                                    <div class="text-[10px] font-mono opacity-85" id="abs-sub-label">Insert Cuvette into Socket</div>
+                                </div>
+
+                                <!-- Digital Peltier Block Temperature Readout Bar -->
+                                <div class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between shadow-inner">
+                                    <div class="flex items-center gap-1.5">
+                                        <i class="fa-solid fa-temperature-half text-amber-400 text-xs"></i>
+                                        <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">Peltier Block:</span>
+                                    </div>
+                                    <span class="text-base font-mono font-bold text-amber-400" id="temp-display">50.0 °C</span>
+                                </div>
+
+                                <!-- Tactile Membrane Keypad Graphic Details -->
+                                <div class="flex items-center justify-between px-1 pt-0.5">
+                                    <div class="flex items-center gap-2">
+                                        <span class="flex items-center gap-1 text-[9px] font-mono text-emerald-400">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>UV LAMP ON
+                                        </span>
+                                        <span class="flex items-center gap-1 text-[9px] font-mono text-cyan-400">
+                                            <span class="h-1.5 w-1.5 rounded-full bg-cyan-400"></span>BLANKED
+                                        </span>
+                                    </div>
+                                    <div class="flex gap-1">
+                                        <span class="w-3 h-2 rounded-sm bg-slate-600 border border-slate-500"></span>
+                                        <span class="w-3 h-2 rounded-sm bg-slate-600 border border-slate-500"></span>
+                                        <span class="w-3 h-2 rounded-sm bg-amber-600/80 border border-amber-500"></span>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
                     </div>
 
-                    <!-- Readout Box -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 text-center">
-                            <div class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Temperature</div>
-                            <div class="text-3xl font-mono font-bold text-amber-400" id="temp-display">50 <span class="text-lg">°C</span></div>
-                        </div>
-                        <div class="lcd-display rounded-lg p-3 text-center">
-                            <div class="text-[11px] uppercase tracking-wider text-emerald-400 font-semibold mb-1">UV Absorbance</div>
-                            <div class="text-3xl font-mono font-bold" id="a260-display">1.002</div>
-                            <div class="text-[10px] text-emerald-500 font-mono">A₂₆₀ Reading</div>
-                        </div>
-                    </div>
-
-                    <!-- Temperature Slider -->
-                    <div class="space-y-1">
-                        <input type="range" id="temp-slider" min="50" max="100" step="1" value="50" oninput="onTempChange(this.value)" class="w-full h-2.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
-                        <div class="flex justify-between text-[11px] font-mono text-slate-400 pt-1">
-                            <span>50°C</span>
-                            <span>60°C</span>
-                            <span>70°C</span>
-                            <span>80°C</span>
-                            <span>90°C</span>
-                            <span>100°C</span>
-                        </div>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="grid grid-cols-1 gap-2 pt-1">
-                        <button onclick="recordCurrentPoint()" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition shadow-md">
-                            <i class="fa-solid fa-table-cells"></i>
-                            <span>Record Current Reading to Table</span>
-                        </button>
-                    </div>
-
-                    <!-- VISUALIZER TOGGLE SWITCH -->
-                    <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between">
-                        <span class="text-xs text-slate-400 font-medium flex items-center gap-2">
-                            <i class="fa-solid fa-eye text-cyan-400"></i>
-                            <span>Show Experiment Visualizer</span>
-                        </span>
-                        <button id="visualizer-toggle-btn" onclick="toggleVisualizer()" class="w-11 h-6 bg-slate-800 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center">
-                            <div id="visualizer-toggle-dot" class="w-4 h-4 bg-slate-400 rounded-full transition-transform duration-200 transform translate-x-0"></div>
-                        </button>
+                    <!-- Machine Heavy Base Skirt & Rubber Lab Bench Feet -->
+                    <div class="bg-slate-950 h-3.5 mx-2 rounded-b-xl border-x-2 border-b-2 border-slate-700 flex items-end justify-between px-8 shadow-xl">
+                        <div class="w-10 h-1.5 bg-slate-700 rounded-t"></div>
+                        <div class="w-10 h-1.5 bg-slate-700 rounded-t"></div>
                     </div>
                 </div>
             </div>
-
-            <!-- COLLAPSIBLE VISUALIZER PANEL (HIDDEN BY DEFAULT) -->
-            <div id="visualizer-panel" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Live Molecular &amp; Optical View</span>
-                    <span id="dna-state-text" class="text-xs font-mono font-bold text-cyan-400">Double-Stranded Helix (Low A₂₆₀)</span>
-                </div>
-                <div class="relative w-full h-48 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden">
-                    <canvas id="visualizerCanvas" class="w-full h-full block"></canvas>
-                </div>
-            </div>
-
         </div>
 
-        <!-- RIGHT PANEL: RESULTS (DATA TABLES FOR ALL SAMPLES) (7 COLS) -->
-        <div class="lg:col-span-7 space-y-5">
-            
-            <!-- STEP 3: RESULTS & DATA TABLES -->
+        <!-- TOP RIGHT PANEL: STEP 2 - PELTIER THERMAL CONTROLLER & LIVE MOLECULAR VIEW (6 COLS) -->
+        <div class="lg:col-span-6 flex flex-col">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4 h-full flex flex-col justify-between">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div class="flex items-center space-x-2">
+                        <span class="h-6 w-6 rounded-full bg-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center">2</span>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Peltier Thermal Controller</h2>
+                    </div>
+                    <span id="loaded-sample-badge" class="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">Chamber Empty</span>
+                </div>
+
+                <!-- Live Chamber Optical & Molecular View -->
+                <div class="relative w-full h-48 sm:h-52 bg-slate-950 rounded-lg border border-slate-800 overflow-hidden flex-grow">
+                    <canvas id="visualizerCanvas" class="w-full h-full block"></canvas>
+                    <div class="absolute bottom-2 right-2.5 bg-slate-900/90 border border-slate-800 px-2.5 py-1 rounded text-[11px] font-mono">
+                        <span id="dna-state-text" class="text-slate-400">Chamber Idle — Load Cuvette</span>
+                    </div>
+                </div>
+
+                <!-- Peltier Heater Controls (Target Temp + Ramp Rate + Start/Hold) -->
+                <div class="bg-slate-950/80 border border-slate-800 rounded-lg p-3.5 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-xs font-semibold text-slate-300">Target Temp:</label>
+                            <div class="flex items-center bg-slate-900 border border-slate-700 rounded-lg overflow-hidden">
+                                <button onclick="adjustTargetTemp(-5)" class="px-2 py-1 text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-800">-5</button>
+                                <button onclick="adjustTargetTemp(-1)" class="px-2 py-1 text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-800 border-l border-slate-800">-1</button>
+                                <span id="target-temp-control" class="px-3 py-1 text-xs font-mono font-bold text-amber-400 border-x border-slate-800">50°C</span>
+                                <button onclick="adjustTargetTemp(1)" class="px-2 py-1 text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-800 border-r border-slate-800">+1</button>
+                                <button onclick="adjustTargetTemp(5)" class="px-2 py-1 text-xs font-mono text-slate-400 hover:text-white hover:bg-slate-800">+5</button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[11px] text-slate-400">Ramp Speed:</span>
+                            <select id="ramp-speed-select" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono rounded-lg px-2 py-1 focus:outline-none">
+                                <option value="1">1°C / sec (Standard)</option>
+                                <option value="3" selected>3°C / sec (Fast Scan)</option>
+                                <option value="10">Instant Jump (Manual)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Heater Action Buttons -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="toggleHeater()" id="btn-heater-toggle" class="py-2.5 px-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition shadow">
+                            <i class="fa-solid fa-fire-flame-curved"></i>
+                            <span id="heater-btn-text">Heat to Target</span>
+                        </button>
+                        <button onclick="coolBlockTo50()" class="py-2.5 px-3 bg-slate-800 hover:bg-sky-950/60 hover:text-sky-300 text-slate-300 font-semibold rounded-lg text-xs border border-slate-700 flex items-center justify-center gap-1.5 transition">
+                            <i class="fa-solid fa-snowflake text-sky-400"></i>
+                            <span>Cool to 50°C</span>
+                        </button>
+                        <button onclick="recordCurrentPoint()" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition shadow">
+                            <i class="fa-solid fa-clipboard-check"></i>
+                            <span>Log Reading</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Quick Protocol Hint -->
+                <div class="bg-slate-950/70 border border-slate-800 rounded-lg p-3 text-[11px] text-slate-400 space-y-1">
+                    <div class="font-bold text-slate-300"><i class="fa-solid fa-flask text-cyan-400 mr-1"></i> Standard Operating Procedure:</div>
+                    <p>1. Drag (or tap) a pre-buffered DNA cuvette (<strong class="text-slate-200">Samples A–D</strong>) from the ice rack into the spectrophotometer's <strong class="text-cyan-400">Sample Hatch</strong>.</p>
+                    <p>2. Set your <strong class="text-amber-400">Target Temp</strong>, run the heater, and click <strong class="text-emerald-400">Log Reading</strong> at each step. Click <strong class="text-sky-400">Cool to 50°C</strong> before loading the next DNA sample.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM FULL-WIDTH PANEL: STEP 3 - SPECTROPHOTOMETER DATA LOG (12 COLS) -->
+        <div class="lg:col-span-12">
             <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl space-y-4">
                 <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-3">
                     <div class="flex items-center space-x-2">
                         <span class="h-6 w-6 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center">3</span>
-                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Recorded Experimental Data Tables</h2>
+                        <h2 class="text-sm font-bold text-white uppercase tracking-wider">Spectrophotometer Data Log</h2>
                     </div>
                     <button onclick="clearAllTables()" class="text-xs text-rose-400 hover:text-rose-300 bg-rose-950/40 border border-rose-900 px-3 py-1.5 rounded-lg font-mono transition flex items-center gap-1.5">
                         <i class="fa-solid fa-trash-can"></i>
-                        <span>Clear All Tables</span>
+                        <span>Clear All Logs</span>
                     </button>
                 </div>
 
-                <!-- 4 DATA TABLES GRID (2x2) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- 4 DATA TABLES GRID (1x4 ACROSS THE BOTTOM ON DESKTOP) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     
                     <!-- SAMPLE A TABLE -->
                     <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2 flex flex-col justify-between">
@@ -207,17 +407,17 @@
                                 </span>
                                 <button onclick="clearSampleTable('A')" class="text-[10px] text-slate-400 hover:text-rose-400 font-mono transition">Clear</button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto mt-2 pr-1">
+                            <div class="max-h-56 overflow-y-auto mt-2 pr-1">
                                 <table class="w-full text-left text-xs font-mono">
                                     <thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-slate-950 border-b border-slate-800">
                                         <tr>
                                             <th class="py-1">Temp (°C)</th>
                                             <th class="py-1">A₂₆₀</th>
-                                            <th class="py-1 text-right">Action</th>
+                                            <th class="py-1 text-right">Del</th>
                                         </tr>
                                     </thead>
                                     <tbody id="table-body-A" class="divide-y divide-slate-800/60 text-slate-300">
-                                        <tr><td colspan="3" class="py-3 text-center text-slate-500 text-[11px] font-sans italic">No points recorded yet</td></tr>
+                                        <tr><td colspan="3" class="py-4 text-center text-slate-500 text-[11px] font-sans italic">No points logged</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -233,17 +433,17 @@
                                 </span>
                                 <button onclick="clearSampleTable('B')" class="text-[10px] text-slate-400 hover:text-rose-400 font-mono transition">Clear</button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto mt-2 pr-1">
+                            <div class="max-h-56 overflow-y-auto mt-2 pr-1">
                                 <table class="w-full text-left text-xs font-mono">
                                     <thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-slate-950 border-b border-slate-800">
                                         <tr>
                                             <th class="py-1">Temp (°C)</th>
                                             <th class="py-1">A₂₆₀</th>
-                                            <th class="py-1 text-right">Action</th>
+                                            <th class="py-1 text-right">Del</th>
                                         </tr>
                                     </thead>
                                     <tbody id="table-body-B" class="divide-y divide-slate-800/60 text-slate-300">
-                                        <tr><td colspan="3" class="py-3 text-center text-slate-500 text-[11px] font-sans italic">No points recorded yet</td></tr>
+                                        <tr><td colspan="3" class="py-4 text-center text-slate-500 text-[11px] font-sans italic">No points logged</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -259,17 +459,17 @@
                                 </span>
                                 <button onclick="clearSampleTable('C')" class="text-[10px] text-slate-400 hover:text-rose-400 font-mono transition">Clear</button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto mt-2 pr-1">
+                            <div class="max-h-56 overflow-y-auto mt-2 pr-1">
                                 <table class="w-full text-left text-xs font-mono">
                                     <thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-slate-950 border-b border-slate-800">
                                         <tr>
                                             <th class="py-1">Temp (°C)</th>
                                             <th class="py-1">A₂₆₀</th>
-                                            <th class="py-1 text-right">Action</th>
+                                            <th class="py-1 text-right">Del</th>
                                         </tr>
                                     </thead>
                                     <tbody id="table-body-C" class="divide-y divide-slate-800/60 text-slate-300">
-                                        <tr><td colspan="3" class="py-3 text-center text-slate-500 text-[11px] font-sans italic">No points recorded yet</td></tr>
+                                        <tr><td colspan="3" class="py-4 text-center text-slate-500 text-[11px] font-sans italic">No points logged</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -285,17 +485,17 @@
                                 </span>
                                 <button onclick="clearSampleTable('D')" class="text-[10px] text-slate-400 hover:text-rose-400 font-mono transition">Clear</button>
                             </div>
-                            <div class="max-h-48 overflow-y-auto mt-2 pr-1">
+                            <div class="max-h-56 overflow-y-auto mt-2 pr-1">
                                 <table class="w-full text-left text-xs font-mono">
                                     <thead class="text-[10px] uppercase text-slate-400 sticky top-0 bg-slate-950 border-b border-slate-800">
                                         <tr>
                                             <th class="py-1">Temp (°C)</th>
                                             <th class="py-1">A₂₆₀</th>
-                                            <th class="py-1 text-right">Action</th>
+                                            <th class="py-1 text-right">Del</th>
                                         </tr>
                                     </thead>
                                     <tbody id="table-body-D" class="divide-y divide-slate-800/60 text-slate-300">
-                                        <tr><td colspan="3" class="py-3 text-center text-slate-500 text-[11px] font-sans italic">No points recorded yet</td></tr>
+                                        <tr><td colspan="3" class="py-4 text-center text-slate-500 text-[11px] font-sans italic">No points logged</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -303,29 +503,29 @@
                     </div>
 
                 </div>
-
-                <div class="text-[11px] text-slate-400 text-center font-sans pt-2 border-t border-slate-800">
-                    <strong>Lab Notebook Guide:</strong> Record data points across temperatures (50°C to 100°C) for each sample, then transcribe into your lab notebook to determine T<sub>m</sub> values and write your CER justification.
-                </div>
             </div>
-
         </div>
 
     </main>
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        // Hidden baseline Tm values and styling for Samples A, B, C, D
+        // Hidden baseline Tm values and styling for Samples A, B, C, D (all pre-buffered in 1x SSC)
         const SAMPLES = {
-            'A': { name: 'Sample A', baseTm: 72.0, color: '#38bdf8' }, // Cyan
-            'B': { name: 'Sample B', baseTm: 82.5, color: '#34d399' }, // Emerald
-            'C': { name: 'Sample C', baseTm: 89.5, color: '#fbbf24' }, // Amber
-            'D': { name: 'Sample D', baseTm: 77.0, color: '#c084fc' }  // Purple
+            'A': { name: 'Sample A (dsDNA)', baseTm: 72.0, color: '#38bdf8', liquidClass: 'bg-cyan-400/50' },    // Cyan
+            'B': { name: 'Sample B (dsDNA)', baseTm: 82.5, color: '#34d399', liquidClass: 'bg-emerald-400/50' }, // Emerald
+            'C': { name: 'Sample C (dsDNA)', baseTm: 89.5, color: '#fbbf24', liquidClass: 'bg-amber-400/50' },   // Amber
+            'D': { name: 'Sample D (dsDNA)', baseTm: 77.0, color: '#c084fc', liquidClass: 'bg-purple-400/50' }   // Purple
         };
 
-        let activeSampleId = 'A';
-        let currentTemp = 50;
-        let showVisualizer = false;
+        // Bench & Instrument State
+        let loadedCuvette = null;         // Currently inside spectrophotometer ('A', 'B', 'C', 'D', or null)
+
+        // Thermal Block State
+        let currentTemp = 50.0;           // Actual Peltier block temperature
+        let targetTemp = 50;              // User-set target temperature
+        let isHeating = false;            // Active heating loop running?
+        let heaterInterval = null;
 
         // Experimental Randomness: Replicate offsets per sample per session
         let samplePrepOffsets = {
@@ -349,7 +549,7 @@
         window.onload = function() {
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
-            updateReadings();
+            updateInstrumentUI();
             renderTables();
             startAnimation();
         };
@@ -360,6 +560,24 @@
             canvas.height = canvas.parentElement.clientHeight;
         }
 
+        function showBenchAlert(msg, type = 'warning') {
+            const alertEl = document.getElementById('bench-alert');
+            const boxEl = document.getElementById('bench-alert-box');
+            const msgEl = document.getElementById('bench-alert-msg');
+            msgEl.innerText = msg;
+
+            if (type === 'success') {
+                boxEl.className = 'bg-emerald-950/90 border border-emerald-600/60 text-emerald-200 px-4 py-3 rounded-xl text-xs font-medium flex items-center justify-between shadow-lg';
+            } else {
+                boxEl.className = 'bg-amber-950/90 border border-amber-600/60 text-amber-200 px-4 py-3 rounded-xl text-xs font-medium flex items-center justify-between shadow-lg';
+            }
+            alertEl.classList.remove('hidden');
+        }
+
+        function hideBenchAlert() {
+            document.getElementById('bench-alert').classList.add('hidden');
+        }
+
         function generateNewReplicate() {
             ['A', 'B', 'C', 'D'].forEach(id => {
                 samplePrepOffsets[id] = {
@@ -368,23 +586,71 @@
                 };
             });
             noiseCache = {};
-            updateReadings();
+            updateInstrumentUI();
+            showBenchAlert('Prepared fresh pre-buffered DNA cuvettes on the ice rack.', 'success');
         }
 
-        // --- MATH MODEL FOR ABSORBANCE (A260) WITH REAL-WORLD NOISE ---
+        // --- DRAG & DROP / CLICK CUVETTE LOADING ---
+        function handleDragStart(e, sampleId) {
+            e.dataTransfer.setData('text/plain', sampleId);
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            document.getElementById('cuvette-drop-zone').classList.add('drop-zone-active');
+        }
+
+        function handleDragLeave(e) {
+            document.getElementById('cuvette-drop-zone').classList.remove('drop-zone-active');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            document.getElementById('cuvette-drop-zone').classList.remove('drop-zone-active');
+            const sampleId = e.dataTransfer.getData('text/plain');
+            if (sampleId && SAMPLES[sampleId]) {
+                loadCuvette(sampleId);
+            }
+        }
+
+        function loadCuvette(sampleId) {
+            // Warn if loading a different DNA sample while the heating block is still hot!
+            if (loadedCuvette !== sampleId && currentTemp > 55) {
+                showBenchAlert(`Thermal Block is currently at ${currentTemp.toFixed(1)}°C! Click "Cool to 50°C" before loading a new DNA sample so it doesn't denature immediately.`);
+                return;
+            }
+
+            stopHeater();
+            loadedCuvette = sampleId;
+            hideBenchAlert();
+            updateInstrumentUI();
+        }
+
+        function ejectCuvette() {
+            stopHeater();
+            loadedCuvette = null;
+            updateInstrumentUI();
+        }
+
+        // --- MATH MODEL FOR ABSORBANCE (A260) ---
         function getAbsorbanceData(temp, sampleId) {
+            if (!sampleId || !SAMPLES[sampleId]) return { absorbance: 0, fraction: 0 };
+
             const prep = samplePrepOffsets[sampleId];
             const tm = SAMPLES[sampleId].baseTm + prep.tmShift;
             
             // Sigmoidal transition fraction
             const fraction = 1 / (1 + Math.exp(-(temp - tm) / 2.5));
             
-            // Baseline A260 model
+            // Baseline A260 model (auto-blanked against 1x SSC buffer)
             const baseAbs = 1.000 + prep.baseShift;
             const idealAbs = baseAbs + 0.400 * fraction;
 
-            // Stable noise per temp & sample until replicate reset
-            const cacheKey = `${sampleId}_${temp}`;
+            // Stable noise per integer temp & sample until replicate reset
+            const roundedTemp = Math.round(temp);
+            const cacheKey = `${sampleId}_${roundedTemp}`;
             if (noiseCache[cacheKey] === undefined) {
                 noiseCache[cacheKey] = (Math.random() + Math.random() - 1) * 0.004;
             }
@@ -397,80 +663,181 @@
             };
         }
 
-        // --- CONTROLS LOGIC ---
-        function selectSample(sampleId) {
-            activeSampleId = sampleId;
+        // --- STEP 2: PELTIER HEATER & THERMAL RAMP CONTROLS ---
+        function adjustTargetTemp(delta) {
+            targetTemp = Math.min(100, Math.max(50, targetTemp + delta));
+            document.getElementById('target-temp-control').innerText = `${targetTemp}°C`;
+        }
 
+        function toggleHeater() {
+            if (!loadedCuvette) {
+                showBenchAlert('Drag or tap a DNA cuvette into the spectrophotometer chamber before starting the heater.');
+                return;
+            }
+
+            if (isHeating) {
+                stopHeater();
+                return;
+            }
+
+            const speed = parseInt(document.getElementById('ramp-speed-select').value, 10);
+
+            // Instant Jump mode
+            if (speed === 10) {
+                currentTemp = targetTemp;
+                updateInstrumentUI();
+                return;
+            }
+
+            if (Math.abs(currentTemp - targetTemp) < 0.1) {
+                showBenchAlert(`Block is already at ${targetTemp}°C. Increase Target Temp first.`);
+                return;
+            }
+
+            isHeating = true;
+            const btn = document.getElementById('btn-heater-toggle');
+            btn.classList.add('heater-active', 'bg-rose-600', 'hover:bg-rose-500', 'text-white');
+            btn.classList.remove('bg-amber-600', 'hover:bg-amber-500', 'text-slate-950');
+            document.getElementById('heater-btn-text').innerText = 'Stop / Hold Temp';
+
+            // Update block temp smoothly every 200ms
+            heaterInterval = setInterval(() => {
+                const step = (speed * 0.2); // degrees per 200ms tick
+                if (currentTemp < targetTemp) {
+                    currentTemp = Math.min(targetTemp, currentTemp + step);
+                } else if (currentTemp > targetTemp) {
+                    currentTemp = Math.max(targetTemp, currentTemp - step);
+                }
+
+                updateInstrumentUI();
+
+                if (Math.abs(currentTemp - targetTemp) < 0.05) {
+                    currentTemp = targetTemp;
+                    updateInstrumentUI();
+                    stopHeater();
+                }
+            }, 200);
+        }
+
+        function stopHeater() {
+            isHeating = false;
+            if (heaterInterval) {
+                clearInterval(heaterInterval);
+                heaterInterval = null;
+            }
+            const btn = document.getElementById('btn-heater-toggle');
+            btn.classList.remove('heater-active', 'bg-rose-600', 'hover:bg-rose-500', 'text-white');
+            btn.classList.add('bg-amber-600', 'hover:bg-amber-500', 'text-slate-950');
+            document.getElementById('heater-btn-text').innerText = 'Heat to Target';
+        }
+
+        function coolBlockTo50() {
+            stopHeater();
+            currentTemp = 50.0;
+            targetTemp = 50;
+            document.getElementById('target-temp-control').innerText = '50°C';
+            hideBenchAlert();
+            updateInstrumentUI();
+        }
+
+        function updateInstrumentUI() {
+            document.getElementById('temp-display').innerHTML = `${currentTemp.toFixed(1)} °C`;
+
+            const badge = document.getElementById('loaded-sample-badge');
+            const a260Display = document.getElementById('a260-display');
+            const subLabel = document.getElementById('abs-sub-label');
+            const stateText = document.getElementById('dna-state-text');
+
+            const dropZone = document.getElementById('cuvette-drop-zone');
+            const emptyView = document.getElementById('chamber-empty-view');
+            const loadedView = document.getElementById('chamber-loaded-view');
+            const ejectBtn = document.getElementById('btn-eject');
+            const hatchStatus = document.getElementById('hatch-door-status');
+
+            // Highlight active cuvette on ice rack
             ['A', 'B', 'C', 'D'].forEach(id => {
-                const btn = document.getElementById(`btn-sample-${id}`);
-                if (id === sampleId) {
-                    btn.className = `sample-btn py-2.5 px-1 rounded-lg border border-${getSampleColorName(id)}-500 bg-${getSampleColorName(id)}-950/40 text-${getSampleColorName(id)}-300 font-bold text-xs text-center transition shadow`;
+                const rackEl = document.getElementById(`rack-cuvette-${id}`);
+                if (id === loadedCuvette) {
+                    rackEl.classList.add('opacity-40', 'ring-2', 'ring-cyan-400');
                 } else {
-                    btn.className = 'sample-btn py-2.5 px-1 rounded-lg border border-slate-800 bg-slate-800/40 text-slate-300 font-bold text-xs text-center transition';
+                    rackEl.classList.remove('opacity-40', 'ring-2', 'ring-cyan-400');
                 }
             });
 
-            document.getElementById('active-sample-badge').innerText = `Sample ${sampleId}`;
-            document.getElementById('active-sample-badge').className = `text-xs font-mono font-bold px-2 py-0.5 rounded bg-${getSampleColorName(sampleId)}-950 text-${getSampleColorName(sampleId)}-400 border border-${getSampleColorName(sampleId)}-800`;
-            updateReadings();
-        }
+            if (!loadedCuvette) {
+                badge.innerText = 'Chamber Empty';
+                badge.className = 'text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700';
+                a260Display.innerText = '---';
+                subLabel.innerText = 'Drag or Tap a DNA Cuvette to Load';
+                stateText.innerText = 'Chamber Idle — Load Cuvette';
+                stateText.className = 'text-slate-400';
 
-        function getSampleColorName(id) {
-            if (id === 'A') return 'cyan';
-            if (id === 'B') return 'emerald';
-            if (id === 'C') return 'amber';
-            return 'purple';
-        }
+                if (hatchStatus) {
+                    hatchStatus.innerText = 'LID OPEN';
+                    hatchStatus.className = 'text-amber-400 font-bold';
+                }
 
-        function toggleVisualizer() {
-            showVisualizer = !showVisualizer;
-            const panel = document.getElementById('visualizer-panel');
-            const dot = document.getElementById('visualizer-toggle-dot');
-            const btn = document.getElementById('visualizer-toggle-btn');
-
-            if (showVisualizer) {
-                panel.classList.remove('hidden');
-                dot.className = 'w-4 h-4 bg-cyan-400 rounded-full transition-transform duration-200 transform translate-x-5';
-                btn.className = 'w-11 h-6 bg-cyan-950 border border-cyan-700 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center';
-                setTimeout(resizeCanvas, 50);
-            } else {
-                panel.classList.add('hidden');
-                dot.className = 'w-4 h-4 bg-slate-400 rounded-full transition-transform duration-200 transform translate-x-0';
-                btn.className = 'w-11 h-6 bg-slate-800 rounded-full p-1 transition-colors duration-200 focus:outline-none flex items-center';
+                emptyView.classList.remove('hidden');
+                loadedView.classList.add('hidden');
+                loadedView.classList.remove('flex');
+                ejectBtn.classList.add('hidden');
+                return;
             }
-        }
 
-        function onTempChange(val) {
-            currentTemp = parseInt(val, 10);
-            updateReadings();
-        }
+            // Show loaded cuvette inside machine chamber
+            if (hatchStatus) {
+                hatchStatus.innerText = 'CELL LOCKED';
+                hatchStatus.className = 'text-emerald-400 font-bold';
+            }
+            emptyView.classList.add('hidden');
+            loadedView.classList.remove('hidden');
+            loadedView.classList.add('flex');
+            ejectBtn.classList.remove('hidden');
 
-        function updateReadings() {
-            document.getElementById('temp-display').innerHTML = `${currentTemp} <span class="text-lg">°C</span>`;
-            const data = getAbsorbanceData(currentTemp, activeSampleId);
-            document.getElementById('a260-display').innerText = data.absorbance.toFixed(3);
+            const sampleInfo = SAMPLES[loadedCuvette];
+            document.getElementById('chamber-cuvette-label').innerText = `Sample ${loadedCuvette}`;
+            document.getElementById('chamber-cuvette-label').style.color = sampleInfo.color;
+            document.getElementById('inserted-cuvette-liquid').className = `w-full h-3/4 ${sampleInfo.liquidClass} border-t border-white/60 transition-colors`;
+
+            badge.innerText = sampleInfo.name;
+            badge.className = 'text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800';
+
+            const data = getAbsorbanceData(currentTemp, loadedCuvette);
+            a260Display.innerText = data.absorbance.toFixed(3);
+            subLabel.innerText = 'A₂₆₀ Absorbance Reading';
+
+            // Update transmitted beam opacity in chamber graphic
+            const beamEl = document.getElementById('uv-beam-transmitted');
+            beamEl.style.opacity = Math.max(0.2, 0.75 - data.fraction * 0.5);
 
             const pctDenatured = Math.round(data.fraction * 100);
             if (pctDenatured < 15) {
-                document.getElementById('dna-state-text').innerText = 'Double-Stranded Helix (Low A₂₆₀)';
-                document.getElementById('dna-state-text').className = 'text-xs font-mono font-bold text-cyan-400';
+                stateText.innerText = 'Double-Stranded Helix (Low A₂₆₀)';
+                stateText.className = 'text-cyan-400';
             } else if (pctDenatured > 85) {
-                document.getElementById('dna-state-text').innerText = 'Denatured Single Strands (High A₂₆₀)';
-                document.getElementById('dna-state-text').className = 'text-xs font-mono font-bold text-rose-400';
+                stateText.innerText = 'Denatured Single Strands (High A₂₆₀)';
+                stateText.className = 'text-rose-400';
             } else {
-                document.getElementById('dna-state-text').innerText = `Unzipping DNA (${pctDenatured}% Denatured)`;
-                document.getElementById('dna-state-text').className = 'text-xs font-mono font-bold text-amber-400';
+                stateText.innerText = `Unzipping DNA (${pctDenatured}% Denatured)`;
+                stateText.className = 'text-amber-400';
             }
         }
 
-        // --- TABLE RECORDING LOGIC ---
+        // --- STEP 3: TABLE RECORDING LOGIC ---
         function recordCurrentPoint() {
-            const data = getAbsorbanceData(currentTemp, activeSampleId);
-            const list = recordedData[activeSampleId];
+            if (!loadedCuvette) {
+                showBenchAlert('Load a DNA sample (Sample A, B, C, or D) into the chamber before logging data.');
+                return;
+            }
+
+            const data = getAbsorbanceData(currentTemp, loadedCuvette);
+            const list = recordedData[loadedCuvette];
             
-            // Append reading in the exact chronological order the user records it
-            list.push({ temp: currentTemp, a260: data.absorbance });
+            // Record exact temperature (rounded to 1 decimal if mid-ramp, or integer if on target)
+            const loggedTemp = Number.isInteger(currentTemp) ? currentTemp : parseFloat(currentTemp.toFixed(1));
+            list.push({ temp: loggedTemp, a260: data.absorbance });
             
+            hideBenchAlert();
             renderTables();
         }
 
@@ -490,10 +857,15 @@
         }
 
         function resetAllData() {
-            currentTemp = 50;
-            document.getElementById('temp-slider').value = 50;
-            selectSample('A');
+            stopHeater();
+            currentTemp = 50.0;
+            targetTemp = 50;
+            loadedCuvette = null;
+            document.getElementById('target-temp-control').innerText = '50°C';
+
             clearAllTables();
+            hideBenchAlert();
+            updateInstrumentUI();
         }
 
         function renderTables() {
@@ -502,13 +874,13 @@
                 const list = recordedData[id];
 
                 if (!list || list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="py-3 text-center text-slate-500 text-[11px] font-sans italic">No points recorded yet</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="3" class="py-4 text-center text-slate-500 text-[11px] font-sans italic">No points logged</td></tr>';
                     return;
                 }
 
                 let html = '';
                 list.forEach((item, idx) => {
-                    const isLatest = (id === activeSampleId && idx === list.length - 1 && item.temp === currentTemp);
+                    const isLatest = (id === loadedCuvette && idx === list.length - 1);
                     const rowBg = isLatest ? 'bg-slate-800/80 font-bold text-white' : 'hover:bg-slate-900';
                     html += `
                         <tr class="${rowBg} transition">
@@ -526,12 +898,10 @@
             });
         }
 
-        // --- DUAL ANIMATED VISUALIZER (SPECTROPHOTOMETER & MOLECULAR VIEW) ---
+        // --- LIVE CHAMBER VISUALIZER (SPECTROPHOTOMETER & MOLECULAR VIEW) ---
         function startAnimation() {
             function draw() {
-                if (showVisualizer) {
-                    renderVisualizer();
-                }
+                renderVisualizer();
                 animAngle += 0.04;
                 requestAnimationFrame(draw);
             }
@@ -545,85 +915,92 @@
 
             ctx.clearRect(0, 0, w, h);
 
-            const data = getAbsorbanceData(currentTemp, activeSampleId);
+            const data = getAbsorbanceData(currentTemp, loadedCuvette);
             const fraction = data.fraction;
 
-            const leftW = w * 0.42;
-            const rightW = w * 0.58;
+            const leftW = w * 0.44;
+            const rightW = w * 0.56;
 
-            // --- 1. MACRO VIEW (SPECTROPHOTOMETER) ---
+            // --- 1. OPTICAL CHAMBER (UV BEAM + PELTIER CUVETTE) ---
             ctx.save();
-            
             ctx.fillStyle = '#475569';
-            ctx.font = '10px Inter';
-            ctx.fillText('MACRO VIEW: SPECTROPHOTOMETER', 12, 18);
+            ctx.font = 'bold 9px Inter';
+            ctx.fillText('OPTICAL CHAMBER (260 nm)', 12, 16);
 
-            // UV Light Source Box
+            // UV Deuterium Lamp
             ctx.fillStyle = '#1e293b';
-            ctx.strokeStyle = '#334155';
+            ctx.strokeStyle = '#38bdf8';
             ctx.lineWidth = 1.5;
-            ctx.fillRect(12, h / 2 - 22, 28, 44);
-            ctx.strokeRect(12, h / 2 - 22, 28, 44);
-            
+            ctx.fillRect(12, h / 2 - 20, 26, 40);
+            ctx.strokeRect(12, h / 2 - 20, 26, 40);
             ctx.fillStyle = '#38bdf8';
-            ctx.font = 'bold 9px JetBrains Mono';
-            ctx.fillText('UV', 18, h / 2 - 4);
+            ctx.font = 'bold 8px JetBrains Mono';
+            ctx.fillText('UV', 18, h / 2 - 3);
             ctx.fillText('260', 16, h / 2 + 8);
 
-            // Cuvette Position
-            const cuvetteX = leftW / 2 - 12;
-            const cuvetteY = h / 2 - 40;
+            // Peltier Heating Block Holder
+            const cuvetteX = leftW / 2 - 14;
+            const cuvetteY = h / 2 - 36;
             const cuvetteW = 28;
-            const cuvetteH = 80;
+            const cuvetteH = 72;
 
-            // Liquid Solution
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
-            ctx.fillRect(cuvetteX + 2, cuvetteY + 6, cuvetteW - 4, cuvetteH - 8);
+            // Thermal glow behind cuvette proportional to temp
+            const heatRatio = (currentTemp - 50) / 50;
+            if (heatRatio > 0.05) {
+                ctx.fillStyle = `rgba(245, 158, 11, ${0.12 + heatRatio * 0.25})`;
+                ctx.fillRect(cuvetteX - 5, cuvetteY + 4, cuvetteW + 10, cuvetteH);
+            }
 
-            // Glass Cuvette Outline
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            // Liquid inside Cuvette (if loaded)
+            if (loadedCuvette) {
+                ctx.fillStyle = loadedCuvette === 'BLANK' ? 'rgba(148, 163, 184, 0.22)' : 'rgba(56, 189, 248, 0.28)';
+                ctx.fillRect(cuvetteX + 2, cuvetteY + 8, cuvetteW - 4, cuvetteH - 10);
+            }
+
+            // Quartz Cuvette Outline
+            ctx.strokeStyle = loadedCuvette ? 'rgba(255, 255, 255, 0.85)' : 'rgba(100, 116, 139, 0.4)';
             ctx.lineWidth = 2;
             ctx.strokeRect(cuvetteX, cuvetteY, cuvetteW, cuvetteH);
 
-            // Temperature Label above cuvette
-            ctx.fillStyle = '#f59e0b';
+            // Temp Badge above Cuvette
+            ctx.fillStyle = isHeating ? '#fb7185' : '#f59e0b';
             ctx.font = 'bold 10px JetBrains Mono';
-            ctx.fillText(`${currentTemp}°C`, cuvetteX - 2, cuvetteY - 8);
+            ctx.fillText(`${currentTemp.toFixed(0)}°C`, cuvetteX - 1, cuvetteY - 6);
 
-            // Incident UV Beam (Light to Cuvette)
+            // Incident UV Beam
             ctx.shadowBlur = 8;
             ctx.shadowColor = '#38bdf8';
             ctx.strokeStyle = '#38bdf8';
-            ctx.lineWidth = 5;
+            ctx.lineWidth = 4.5;
             ctx.beginPath();
-            ctx.moveTo(40, h / 2);
+            ctx.moveTo(38, h / 2);
             ctx.lineTo(cuvetteX, h / 2);
             ctx.stroke();
 
-            // Transmitted UV Beam (Cuvette to Detector)
-            const beamWidth = Math.max(1.5, 5 - fraction * 3);
-            const beamAlpha = 0.9 - fraction * 0.4;
+            // Transmitted UV Beam
+            const beamAttenuation = !loadedCuvette ? 0 : (0.35 + fraction * 0.45);
+            const beamWidth = Math.max(1.2, 4.5 * (1 - beamAttenuation));
+            const beamAlpha = Math.max(0.25, 0.95 - beamAttenuation);
             ctx.strokeStyle = `rgba(56, 189, 248, ${beamAlpha})`;
             ctx.lineWidth = beamWidth;
             ctx.beginPath();
             ctx.moveTo(cuvetteX + cuvetteW, h / 2);
-            ctx.lineTo(leftW - 18, h / 2);
+            ctx.lineTo(leftW - 24, h / 2);
             ctx.stroke();
 
-            // Detector Box
+            // Photodiode Detector
             ctx.shadowBlur = 0;
             ctx.fillStyle = '#1e293b';
             ctx.strokeStyle = '#10b981';
             ctx.lineWidth = 1.5;
-            ctx.fillRect(leftW - 18, h / 2 - 22, 22, 44);
-            ctx.strokeRect(leftW - 18, h / 2 - 22, 22, 44);
+            ctx.fillRect(leftW - 24, h / 2 - 20, 22, 40);
+            ctx.strokeRect(leftW - 24, h / 2 - 20, 22, 40);
             ctx.fillStyle = '#10b981';
-            ctx.font = 'bold 9px JetBrains Mono';
-            ctx.fillText('DET', leftW - 14, h / 2 + 4);
-
+            ctx.font = 'bold 8px JetBrains Mono';
+            ctx.fillText('DET', leftW - 20, h / 2 + 3);
             ctx.restore();
 
-            // Divider Line
+            // Divider
             ctx.strokeStyle = '#1e293b';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
@@ -631,23 +1008,31 @@
             ctx.lineTo(leftW, h - 10);
             ctx.stroke();
 
-            // --- 2. MICRO VIEW (DNA MOLECULE) ---
+            // --- 2. MOLECULAR VIEW INSIDE CUVETTE ---
             ctx.save();
-
             ctx.fillStyle = '#475569';
-            ctx.font = '10px Inter';
-            ctx.fillText('MICRO VIEW: MOLECULAR HELIX', leftW + 12, 18);
+            ctx.font = 'bold 9px Inter';
+            ctx.fillText('MOLECULAR STATE IN CUVETTE', leftW + 12, 16);
+
+            if (!loadedCuvette) {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '11px JetBrains Mono';
+                ctx.textAlign = 'center';
+                ctx.fillText('No Cuvette Inserted', leftW + rightW / 2, h / 2);
+                ctx.restore();
+                return;
+            }
 
             const dnaCenterX = leftW + rightW / 2;
-            const dnaCenterY = h / 2 + 5;
-            const numPoints = 14;
-            const length = 130;
-            const amp = 18 * (1 - fraction * 0.3);
-            const separation = fraction * 38;
+            const dnaCenterY = h / 2 - 2;
+            const numPoints = 12;
+            const length = 105;
+            const amp = 16 * (1 - fraction * 0.3);
+            const separation = fraction * 34;
 
             for (let i = 0; i < numPoints; i++) {
                 const y = dnaCenterY - length / 2 + (i / (numPoints - 1)) * length;
-                const phase = animAngle + (i * 0.4);
+                const phase = animAngle + (i * 0.45);
                 
                 const x1 = dnaCenterX - separation + Math.sin(phase) * amp;
                 const x2 = dnaCenterX + separation - Math.sin(phase) * amp;
@@ -663,23 +1048,24 @@
                     ctx.stroke();
                 }
 
-                ctx.fillStyle = fraction > 0.5 ? '#f43f5e' : SAMPLES[activeSampleId].color;
+                ctx.fillStyle = fraction > 0.5 ? '#f43f5e' : SAMPLES[loadedCuvette].color;
                 ctx.beginPath();
-                ctx.arc(x1, y, 3.5, 0, Math.PI * 2);
+                ctx.arc(x1, y, 3, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.fillStyle = fraction > 0.5 ? '#fb7185' : '#34d399';
                 ctx.beginPath();
-                ctx.arc(x2, y, 3.5, 0, Math.PI * 2);
+                ctx.arc(x2, y, 3, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            ctx.strokeStyle = fraction > 0.5 ? '#f43f5e' : SAMPLES[activeSampleId].color;
+            // Sugar-phosphate backbones
+            ctx.strokeStyle = fraction > 0.5 ? '#f43f5e' : SAMPLES[loadedCuvette].color;
             ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
                 const y = dnaCenterY - length / 2 + (i / (numPoints - 1)) * length;
-                const phase = animAngle + (i * 0.4);
+                const phase = animAngle + (i * 0.45);
                 const x1 = dnaCenterX - separation + Math.sin(phase) * amp;
                 if (i === 0) ctx.moveTo(x1, y);
                 else ctx.lineTo(x1, y);
@@ -690,7 +1076,7 @@
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
                 const y = dnaCenterY - length / 2 + (i / (numPoints - 1)) * length;
-                const phase = animAngle + (i * 0.4);
+                const phase = animAngle + (i * 0.45);
                 const x2 = dnaCenterX + separation - Math.sin(phase) * amp;
                 if (i === 0) ctx.moveTo(x2, y);
                 else ctx.lineTo(x2, y);
